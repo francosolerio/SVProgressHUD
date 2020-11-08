@@ -66,16 +66,41 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 
 + (SVProgressHUD*)sharedView {
     static dispatch_once_t once;
-    
     static SVProgressHUD *sharedView;
 #if !defined(SV_APP_EXTENSIONS)
-    dispatch_once(&once, ^{ sharedView = [[self alloc] initWithFrame:[[[UIApplication sharedApplication] delegate] window].bounds]; });
+  dispatch_once(&once, ^{ sharedView = [[self alloc] initWithFrame:[self.keyWindow bounds]];});
 #else
     dispatch_once(&once, ^{ sharedView = [[self alloc] initWithFrame:[[UIScreen mainScreen] bounds]]; });
 #endif
     return sharedView;
 }
 
++ (UIScene*)scene {
+    return [[[[UIApplication sharedApplication] connectedScenes] allObjects] firstObject];
+}
+
++ (UIWindow*)keyWindow {
+    UIWindow *window ;
+    UIScene *scene = [self scene];
+    if([scene.delegate conformsToProtocol:@protocol(UIWindowSceneDelegate)]){
+        window = [(id <UIWindowSceneDelegate>)scene.delegate window];
+    }else{
+      window = [[[UIApplication sharedApplication]delegate]window];
+    }
+    return window;
+}
+
++(UIInterfaceOrientation) interfaceOrientation {
+    UIWindowScene *scene = (UIWindowScene*)[self scene];
+    if([scene.delegate conformsToProtocol:@protocol(UIWindowSceneDelegate)]){
+        return ((UIWindowScene*)scene).interfaceOrientation;
+    } else {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated"
+        return UIApplication.sharedApplication.statusBarOrientation;
+#pragma clang diagnostic pop
+    }
+}
 
 #pragma mark - Setters
 
@@ -428,7 +453,7 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
         _ringNoTextRadius = 24.0f;
         
         _cornerRadius = 14.0f;
-		
+        
         _graceTimeInterval = 0.0f;
         _minimumDismissTimeInterval = 5.0;
         _maximumDismissTimeInterval = CGFLOAT_MAX;
@@ -611,6 +636,13 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 
 - (void)registerNotifications {
 #if TARGET_OS_IOS
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated"
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(positionHUD:)
+                                                 name:UIApplicationDidChangeStatusBarOrientationNotification
+                                               object:nil];
+#pragma clang diagnostic pop
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(positionHUD:)
                                                  name:UIKeyboardWillHideNotification
@@ -641,20 +673,17 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
     return (self.statusLabel.text ? @{SVProgressHUDStatusUserInfoKey : self.statusLabel.text} : nil);
 }
 
-- (void)layoutSubviews {
-    [super layoutSubviews];
-    [self positionHUD:nil];
-}
-
 - (void)positionHUD:(NSNotification*)notification {
     CGFloat keyboardHeight = 0.0f;
     double animationDuration = 0.0;
 
 #if !defined(SV_APP_EXTENSIONS) && TARGET_OS_IOS
-    self.frame = [[[UIApplication sharedApplication] delegate] window].bounds;
-    UIInterfaceOrientation orientation = UIApplication.sharedApplication.windows.firstObject.windowScene.interfaceOrientation;
+    UIWindow *window = [SVProgressHUD keyWindow];
+    UIInterfaceOrientation orientation = [SVProgressHUD interfaceOrientation];
+    self.frame = [window bounds];
 #elif !defined(SV_APP_EXTENSIONS) && !TARGET_OS_IOS
-    self.frame= [UIApplication sharedApplication].keyWindow.bounds;
+    UIWindow *window = [SVProgressHUD keyWindow];
+    self.frame = [window bounds];
 #else
     if (self.viewForExtension) {
         self.frame = self.viewForExtension.frame;
@@ -687,11 +716,19 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
     
     // Get the currently active frame of the display (depends on orientation)
     CGRect orientationFrame = self.bounds;
-
+    CGRect statusBarFrame;
 #if !defined(SV_APP_EXTENSIONS) && TARGET_OS_IOS
-    CGRect statusBarFrame = UIApplication.sharedApplication.windows.firstObject.windowScene.statusBarManager.statusBarFrame;
+    UIScene *scene = [SVProgressHUD scene];
+    if([scene.delegate conformsToProtocol:@protocol(UIWindowSceneDelegate)]){
+        statusBarFrame = [[(UIWindowScene*)scene statusBarManager]statusBarFrame];
+    }else{
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated"
+        statusBarFrame = UIApplication.sharedApplication.statusBarFrame;
+#pragma clang diagnostic pop
+    }
 #else
-    CGRect statusBarFrame = CGRectZero;
+    statusBarFrame = CGRectZero;
 #endif
     
     if (_motionEffectEnabled) {
@@ -1033,7 +1070,7 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
                     
                     // Tell the rootViewController to update the StatusBar appearance
 #if !defined(SV_APP_EXTENSIONS) && TARGET_OS_IOS
-                    UIViewController *rootController = [[UIApplication sharedApplication] keyWindow].rootViewController;
+                    UIViewController *rootController = [SVProgressHUD keyWindow].rootViewController;
                     [rootController setNeedsStatusBarAppearanceUpdate];
 #endif
                     
@@ -1224,7 +1261,10 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
     
     // Update frames
 #if !defined(SV_APP_EXTENSIONS)
-    CGRect windowBounds = [[[UIApplication sharedApplication] delegate] window].bounds;
+  
+    UIWindow *window = [SVProgressHUD keyWindow];
+  
+    CGRect windowBounds = [window bounds];
     _controlView.frame = windowBounds;
 #else
     _controlView.frame = [UIScreen mainScreen].bounds;
@@ -1376,7 +1416,7 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
         BOOL windowIsVisible = !window.hidden && window.alpha > 0;
         BOOL windowLevelSupported = (window.windowLevel >= UIWindowLevelNormal && window.windowLevel <= self.maxSupportedWindowLevel);
         BOOL windowKeyWindow = window.isKeyWindow;
-			
+            
         if(windowOnMainScreen && windowIsVisible && windowLevelSupported && windowKeyWindow) {
             return window;
         }
@@ -1432,15 +1472,15 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 
 #if TARGET_OS_IOS && __IPHONE_OS_VERSION_MAX_ALLOWED >= 100000
 - (UINotificationFeedbackGenerator *)hapticGenerator NS_AVAILABLE_IOS(10_0) {
-	// Only return if haptics are enabled
-	if(!self.hapticsEnabled) {
-		return nil;
-	}
-	
-	if(!_hapticGenerator) {
-		_hapticGenerator = [[UINotificationFeedbackGenerator alloc] init];
-	}
-	return _hapticGenerator;
+    // Only return if haptics are enabled
+    if(!self.hapticsEnabled) {
+        return nil;
+    }
+    
+    if(!_hapticGenerator) {
+        _hapticGenerator = [[UINotificationFeedbackGenerator alloc] init];
+    }
+    return _hapticGenerator;
 }
 #endif
 
