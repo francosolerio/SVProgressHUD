@@ -1378,7 +1378,7 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 - (CGFloat)visibleKeyboardHeight {
 #if !defined(SV_APP_EXTENSIONS)
     UIWindow *keyboardWindow = nil;
-    for (UIWindow *testWindow in UIApplication.sharedApplication.windows) {
+    for (UIWindow *testWindow in self.window.windowScene.windows) {
         if(![testWindow.class isEqual:UIWindow.class]) {
             keyboardWindow = testWindow;
             break;
@@ -1410,7 +1410,7 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
     
 - (UIWindow *)frontWindow {
 #if !defined(SV_APP_EXTENSIONS)
-    NSEnumerator *frontToBackWindows = [UIApplication.sharedApplication.windows reverseObjectEnumerator];
+    NSEnumerator *frontToBackWindows = [self.window.windowScene.windows reverseObjectEnumerator];
     for (UIWindow *window in frontToBackWindows) {
         BOOL windowOnMainScreen = window.screen == UIScreen.mainScreen;
         BOOL windowIsVisible = !window.hidden && window.alpha > 0;
