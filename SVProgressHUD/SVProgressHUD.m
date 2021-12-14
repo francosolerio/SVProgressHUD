@@ -1378,10 +1378,16 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
 - (CGFloat)visibleKeyboardHeight {
 #if !defined(SV_APP_EXTENSIONS)
     UIWindow *keyboardWindow = nil;
-    for (UIWindow *testWindow in self.window.windowScene.windows) {
-        if(![testWindow.class isEqual:UIWindow.class]) {
-            keyboardWindow = testWindow;
-            break;
+    NSEnumerator *scenesEnumerator = [UIApplication.sharedApplication.connectedScenes objectEnumerator];
+    for (UIWindowScene *scene in scenesEnumerator) {
+        if(scene.activationState == UISceneActivationStateForegroundActive) {
+            NSEnumerator* windowsEnumerator = [scene.windows objectEnumerator];
+            for (UIWindow *window in windowsEnumerator) {
+                if(![window.class isEqual:UIWindow.class]) {
+                    keyboardWindow = window;
+                    break;
+                }
+            }
         }
     }
     
@@ -1410,15 +1416,20 @@ static const CGFloat SVProgressHUDLabelSpacing = 8.0f;
     
 - (UIWindow *)frontWindow {
 #if !defined(SV_APP_EXTENSIONS)
-    NSEnumerator *frontToBackWindows = [self.window.windowScene.windows reverseObjectEnumerator];
-    for (UIWindow *window in frontToBackWindows) {
-        BOOL windowOnMainScreen = window.screen == UIScreen.mainScreen;
-        BOOL windowIsVisible = !window.hidden && window.alpha > 0;
-        BOOL windowLevelSupported = (window.windowLevel >= UIWindowLevelNormal && window.windowLevel <= self.maxSupportedWindowLevel);
-        BOOL windowKeyWindow = window.isKeyWindow;
-            
-        if(windowOnMainScreen && windowIsVisible && windowLevelSupported && windowKeyWindow) {
-            return window;
+    NSEnumerator *scenesEnumerator = [UIApplication.sharedApplication.connectedScenes objectEnumerator];
+    for (UIWindowScene *scene in scenesEnumerator) {
+        if(scene.activationState == UISceneActivationStateForegroundActive) {
+            NSEnumerator* windowsEnumerator = [scene.windows objectEnumerator];
+            for (UIWindow *window in windowsEnumerator) {
+                BOOL windowOnMainScreen = window.screen == UIScreen.mainScreen;
+                BOOL windowIsVisible = !window.hidden && window.alpha > 0;
+                BOOL windowLevelSupported = (window.windowLevel >= UIWindowLevelNormal && window.windowLevel <= self.maxSupportedWindowLevel);
+                BOOL windowKeyWindow = window.isKeyWindow;
+                    
+                if(windowOnMainScreen && windowIsVisible && windowLevelSupported && windowKeyWindow) {
+                    return window;
+                }
+            }
         }
     }
 #endif
